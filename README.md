@@ -11,3 +11,11 @@ Shared container base images for Zeno deployments.
 
 Use the `build` tag for bundle install and test stages. Use the `runtime` tag for the final deployed image.
 
+## Lisette Go Base
+
+`lisette-go-base` publishes a Go and Lisette build image for Lisette services:
+
+- `ghcr.io/zenomcpe/lisette-go-base:go1.26.4`
+- `ghcr.io/zenomcpe/lisette-go-base:go1.26.4-e819ec010fe9f3758d45e961a0d9a11acb3dd26f`
+
+Use this image for Lisette build and test stages that need the pinned Go toolchain and Lisette compiler.

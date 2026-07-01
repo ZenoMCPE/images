@@ -1,0 +1,71 @@
+name: Lisette Go Base
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "lisette-go-base/**"
+      - ".github/workflows/lisette-go-base.yml"
+  workflow_dispatch:
+    inputs:
+      go-version:
+        description: Go version tag to build.
+        required: true
+        default: "1.26.4"
+        type: string
+      lisette-repo-url:
+        description: Lisette repository URL.
+        required: true
+        default: "https://github.com/ivov/lisette.git"
+        type: string
+      lisette-commit-hash:
+        description: Lisette commit hash to install.
+        required: true
+        default: "e819ec010fe9f3758d45e961a0d9a11acb3dd26f"
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/zenomcpe/lisette-go-base
+  GO_VERSION: ${{ github.event.inputs.go-version || '1.26.4' }}
+  LISETTE_REPO_URL: ${{ github.event.inputs.lisette-repo-url || 'https://github.com/ivov/lisette.git' }}
+  LISETTE_COMMIT_HASH: ${{ github.event.inputs.lisette-commit-hash || 'e819ec010fe9f3758d45e961a0d9a11acb3dd26f' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: lisette-go-base/Dockerfile
+          target: base
+          build-args: |
+            GO_VERSION=${{ env.GO_VERSION }}
+            LISETTE_REPO_URL=${{ env.LISETTE_REPO_URL }}
+            LISETTE_COMMIT_HASH=${{ env.LISETTE_COMMIT_HASH }}
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:go${{ env.GO_VERSION }}
+            ${{ env.IMAGE }}:go${{ env.GO_VERSION }}-${{ env.LISETTE_COMMIT_HASH }}
+          cache-from: type=gha,scope=lisette-go-base
+          cache-to: type=gha,mode=max,scope=lisette-go-base
