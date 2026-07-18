@@ -19,3 +19,12 @@ Use the `build` tag for bundle install and test stages. Use the `runtime` tag fo
 - `ghcr.io/zenomcpe/lisette-go-base:go1.26.4-e819ec010fe9f3758d45e961a0d9a11acb3dd26f`
 
 Use this image for Lisette build and test stages that need the pinned Go toolchain and Lisette compiler.
+
+## GoPlus Base
+
+`goplus-base` publishes the pinned GoPlus toolchain used while GoPlus remains a maintained Go fork:
+
+- `ghcr.io/zenomcpe/goplus-base:go1.28-devel`
+- `ghcr.io/zenomcpe/goplus-base:go1.28-devel-3515a2c1a7dae2a8b6c7f93503b0437de0bac5be`
+
+Use the commit-qualified tag for reproducible builds. The shorter development tag follows the commit configured in the image workflow.
