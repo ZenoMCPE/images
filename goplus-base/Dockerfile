@@ -34,7 +34,6 @@ ENV GOPRIVATE=github.com/ZenoMCPE/*,github.com/zenomcpe/*,github.com/oomph-ac/*,
 ENV GONOPROXY=github.com/ZenoMCPE/*,github.com/zenomcpe/*,github.com/oomph-ac/*,github.com/df-mc/dragonfly
 ENV GONOSUMDB=github.com/ZenoMCPE/*,github.com/zenomcpe/*,github.com/oomph-ac/*,github.com/df-mc/dragonfly
 ENV GOTOOLCHAIN=local
-ENV PATH=/usr/local/go/bin:$PATH
 ENV GOMAXPROCS=1
 
 RUN apt-get update && \
@@ -48,6 +47,7 @@ RUN apt-get update && \
 
 COPY --from=build /opt/goplus/usr/local/go /usr/local/go
 
-RUN go version
+RUN ln -s /usr/local/go/bin/go /usr/local/bin/go+ && \
+    go+ version
 
 WORKDIR /app
