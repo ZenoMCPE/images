@@ -1,6 +1,6 @@
 package main
 
-enum Result {
+type Result enum {
 	Ok { value int }
 	Err { message string }
 }
