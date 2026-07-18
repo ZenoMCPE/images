@@ -27,7 +27,7 @@ on:
       goplus-commit-hash:
         description: GoPlus commit hash to install.
         required: true
-        default: "3515a2c1a7dae2a8b6c7f93503b0437de0bac5be"
+        default: "ee3aaf3a1d05b3f378c2df051a0b43683233ab81"
         type: string
 
 permissions:
@@ -39,7 +39,7 @@ env:
   BOOTSTRAP_GO_VERSION: ${{ github.event.inputs.bootstrap-go-version || '1.26.4' }}
   GOPLUS_VERSION: ${{ github.event.inputs.goplus-version || '1.28-devel' }}
   GOPLUS_REPO_URL: ${{ github.event.inputs.goplus-repo-url || 'https://github.com/RestartFU/goplus.git' }}
-  GOPLUS_COMMIT_HASH: ${{ github.event.inputs.goplus-commit-hash || '3515a2c1a7dae2a8b6c7f93503b0437de0bac5be' }}
+  GOPLUS_COMMIT_HASH: ${{ github.event.inputs.goplus-commit-hash || 'ee3aaf3a1d05b3f378c2df051a0b43683233ab81' }}
 
 jobs:
   build:
