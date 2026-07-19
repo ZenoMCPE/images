@@ -25,6 +25,6 @@ Use this image for Lisette build and test stages that need the pinned Go toolcha
 `goplus-base` publishes the pinned GoPlus toolchain used while GoPlus remains a maintained Go fork:
 
 - `ghcr.io/zenomcpe/goplus-base:go1.28-devel`
-- `ghcr.io/zenomcpe/goplus-base:go1.28-devel-ee3aaf3a1d05b3f378c2df051a0b43683233ab81`
+- `ghcr.io/zenomcpe/goplus-base:go1.28-devel-aecf0b01bc447a22f4a646ce79df026e5ee2a2db`
 
 Use the commit-qualified tag for reproducible builds. The shorter development tag follows the commit configured in the image workflow. The forked toolchain is exposed as `go+` so it remains visibly distinct from standard Go.

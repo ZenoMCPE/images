@@ -1,8 +1,17 @@
 package main
 
+import (
+	"bytes"
+	"encoding/gob"
+)
+
 type Result enum {
 	Ok { value int }
 	Err { message string }
+}
+
+type ItemKind enum {
+	None
 }
 
 func main() {
@@ -14,5 +23,11 @@ func main() {
 		}
 	case Err, nil:
 		panic("unexpected enum variant")
+	}
+
+	var kind ItemKind = None{}
+	var encoded bytes.Buffer
+	if err := gob.NewEncoder(&encoded).Encode(map[string]any{"kind": kind}); err != nil {
+		panic(err)
 	}
 }
