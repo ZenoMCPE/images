@@ -18,14 +18,11 @@ RUN mkdir -p /usr/local/goplus && \
 
 WORKDIR /usr/local/goplus
 
-RUN make install \
-      DESTDIR=/opt/goplus \
-      INSTALL_GOROOT=/usr/local/go \
-      BINDIR=/usr/local/bin
+RUN cd src && ./make.bash
 
 COPY goplus-base/enum_smoke.go /tmp/enum_smoke.go
 
-RUN /opt/goplus/usr/local/go/bin/go run /tmp/enum_smoke.go
+RUN ./bin/go run /tmp/enum_smoke.go && rm -rf .git
 
 FROM debian:bookworm-slim AS base
 
@@ -45,7 +42,7 @@ RUN apt-get update && \
     mkdir -p /root/.ssh && \
     ssh-keyscan github.com >> /root/.ssh/known_hosts
 
-COPY --from=build /opt/goplus/usr/local/go /usr/local/go
+COPY --from=build /usr/local/goplus /usr/local/go
 
 RUN ln -s /usr/local/go/bin/go /usr/local/bin/go+ && \
     go+ version
