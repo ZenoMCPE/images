@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1.7
 
-ARG BOOTSTRAP_GO_VERSION=1.26.4
-ARG GOPLUS_REPO_URL=https://github.com/RestartFU/goplus.git
-ARG GOPLUS_COMMIT_HASH=aecf0b01bc447a22f4a646ce79df026e5ee2a2db
+ARG BOOTSTRAP_GO_VERSION=1.26.5
+ARG GOPLUS_REPO_URL=https://github.com/goonward/goplus.git
+ARG GOPLUS_COMMIT_HASH=02e4e90202903dae8df75377f0a9d106357094c6
 
 FROM golang:${BOOTSTRAP_GO_VERSION}-bookworm AS build
 ARG GOPLUS_REPO_URL

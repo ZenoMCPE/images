@@ -12,22 +12,22 @@ on:
       bootstrap-go-version:
         description: Go version used to bootstrap the fork.
         required: true
-        default: "1.26.4"
+        default: "1.26.5"
         type: string
       goplus-version:
         description: GoPlus version used in the mutable image tag.
         required: true
-        default: "1.28-devel"
+        default: "1.26.5"
         type: string
       goplus-repo-url:
         description: GoPlus repository URL.
         required: true
-        default: "https://github.com/RestartFU/goplus.git"
+        default: "https://github.com/goonward/goplus.git"
         type: string
       goplus-commit-hash:
         description: GoPlus commit hash to install.
         required: true
-        default: "aecf0b01bc447a22f4a646ce79df026e5ee2a2db"
+        default: "02e4e90202903dae8df75377f0a9d106357094c6"
         type: string
 
 permissions:
@@ -36,10 +36,10 @@ permissions:
 
 env:
   IMAGE: ghcr.io/zenomcpe/goplus-base
-  BOOTSTRAP_GO_VERSION: ${{ github.event.inputs.bootstrap-go-version || '1.26.4' }}
-  GOPLUS_VERSION: ${{ github.event.inputs.goplus-version || '1.28-devel' }}
-  GOPLUS_REPO_URL: ${{ github.event.inputs.goplus-repo-url || 'https://github.com/RestartFU/goplus.git' }}
-  GOPLUS_COMMIT_HASH: ${{ github.event.inputs.goplus-commit-hash || 'aecf0b01bc447a22f4a646ce79df026e5ee2a2db' }}
+  BOOTSTRAP_GO_VERSION: ${{ github.event.inputs.bootstrap-go-version || '1.26.5' }}
+  GOPLUS_VERSION: ${{ github.event.inputs.goplus-version || '1.26.5' }}
+  GOPLUS_REPO_URL: ${{ github.event.inputs.goplus-repo-url || 'https://github.com/goonward/goplus.git' }}
+  GOPLUS_COMMIT_HASH: ${{ github.event.inputs.goplus-commit-hash || '02e4e90202903dae8df75377f0a9d106357094c6' }}
 
 jobs:
   build:
