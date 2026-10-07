@@ -28,3 +28,9 @@ Use this image for Lisette build and test stages that need the pinned Go toolcha
 - `ghcr.io/zenomcpe/goplus-base:go1.28-devel-ee3aaf3a1d05b3f378c2df051a0b43683233ab81`
 
 Use the commit-qualified tag for reproducible builds. The shorter development tag follows the commit configured in the image workflow. The forked toolchain is exposed as `go+` so it remains visibly distinct from standard Go.
+
+## Internal client native builders
+
+The manual internal client workflow builds Windows and both macOS architectures
+for the private client release pipeline. It stores no application source history.
+See [builder instructions](client-native/README.md).
