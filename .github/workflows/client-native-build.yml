@@ -53,25 +53,28 @@ jobs:
             arch: x86_64
             target: x86_64-pc-windows-msvc
             runner: windows-2025
+            jobs: 4
           - platform: macos
             arch: arm64
             target: aarch64-apple-darwin
             runner: macos-15
+            jobs: 3
           - platform: macos
             arch: x86_64
             target: x86_64-apple-darwin
             runner: macos-15-intel
+            jobs: 4
     env:
       SOURCE_SHA: ${{ inputs.source_sha }}
       RELEASE_VERSION: ${{ inputs.version }}
       REQUEST_ID: ${{ inputs.request_id }}
-      CARGO_BUILD_JOBS: '2'
+      CARGO_BUILD_JOBS: ${{ matrix.jobs }}
       CARGO_PROFILE_DEV_DEBUG: '0'
       CARGO_PROFILE_TEST_DEBUG: '0'
       CARGO_PROFILE_RELEASE_DEBUG: '0'
       CARGO_INCREMENTAL: '0'
       CARGO_TERM_COLOR: never
-      GOFLAGS: -p=2
+      GOFLAGS: -p=${{ matrix.jobs }}
     defaults:
       run:
         shell: bash
