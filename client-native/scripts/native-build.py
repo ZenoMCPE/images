@@ -12,6 +12,7 @@ import subprocess
 import stat
 import sys
 import tempfile
+import time
 import tomllib
 import uuid
 import zipfile
@@ -128,13 +129,17 @@ def build(source, output, env):
             def run(command, cwd=source, extra=None):
                 nonlocal stage
                 stage += 1
+                started = time.monotonic()
+                print(f'Native build stage {stage} started.', flush=True)
                 log.write(f'\nNative build stage {stage}\n'.encode())
                 log.flush()
                 variables = child_env | (extra or {})
                 result = subprocess.run(command, cwd=cwd, env=variables, stdout=log, stderr=subprocess.STDOUT)
+                elapsed = time.monotonic() - started
                 if result.returncode:
-                    print(f'Native build stage {stage} failed (exit {result.returncode}).', file=sys.stderr)
+                    print(f'Native build stage {stage} failed (exit {result.returncode}, {elapsed:.1f}s).', file=sys.stderr, flush=True)
                     raise RuntimeError('Private build stage failed')
+                print(f'Native build stage {stage} completed ({elapsed:.1f}s).', flush=True)
 
             run(['python', '-m', 'unittest', 'discover', '-s', 'scripts/tests'])
             run(['cargo', 'test', '--locked', '-p', 'zeno-client-mod'], source / 'mods/zeno-client')
@@ -147,7 +152,7 @@ def build(source, output, env):
             run(['python', 'scripts/stage-runtime.py', '--source', 'build/cinnabar', '--output', 'build/runtime', '--platform', platform])
             if platform == 'windows':
                 run(['pwsh', '-NoProfile', '-File', 'scripts/tests/install.Tests.ps1'])
-            run(['cargo', 'test', '--locked', '--target', target])
+            run(['cargo', 'test', '--release', '--locked', '--target', target])
             run(['cargo', 'build', '--locked', '--release', '--target', target])
             run(['python', 'scripts/package-release.py'])
         archive = source / 'dist' / f'ZenoClient-{env["RELEASE_VERSION"]}-{platform}-{arch}.zip'
