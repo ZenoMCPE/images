@@ -1,10 +1,14 @@
 from pathlib import Path
 import hashlib
+import contextlib
+import io
+import subprocess
 import importlib.util
 import tempfile
 import unittest
 import uuid
 import zipfile
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('native_builder', Path(__file__).parents[1] / 'native-build.py')
 builder = importlib.util.module_from_spec(spec)
@@ -67,6 +71,91 @@ class NativeBuilderTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 builder.verify_archive(archive, '0.1.3', 'windows', 'x86_64')
 
+
+
+class RuntimeReuseTests(unittest.TestCase):
+    def exercise(self, reuse_status, platform='macos', arch='arm64', mismatched_checkout=False):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'private-source'
+            runtime = source / 'build/cinnabar'
+            runtime.mkdir(parents=True)
+            archive = source / 'dist' / f'ZenoClient-0.1.3-{platform}-{arch}.zip'
+            archive.parent.mkdir()
+            with zipfile.ZipFile(archive, 'w') as packaged:
+                packaged.writestr(archive.stem + '/compiled-fixture', b'compiled')
+            digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+            archive.with_name(archive.name + '.sha256').write_text(f'{digest}  {archive.name}\n')
+            output = root / 'artifacts'
+            revision = 'a' * 40
+            env = {'SOURCE_SHA': 'b' * 40, 'RELEASE_VERSION': '0.1.3',
+                   'REQUEST_ID': str(uuid.uuid4()), 'RELEASE_PLATFORM': platform,
+                   'RELEASE_ARCH': arch, 'RELEASE_TARGET': builder.TARGETS[platform, arch]}
+            commands = []
+            def run(command, **kwargs):
+                commands.append(command)
+                status = reuse_status if command[:2] == ['python', 'scripts/reuse-runtime.py'] else 0
+                return subprocess.CompletedProcess(command, status)
+            captured = io.StringIO()
+            error = None
+            with patch.object(builder, 'inspect_source', return_value=revision), \
+                 patch.object(builder.subprocess, 'check_output', return_value='c' * 40 if mismatched_checkout else revision), \
+                 patch.object(builder.subprocess, 'run', side_effect=run), \
+                 contextlib.redirect_stdout(captured), contextlib.redirect_stderr(captured):
+                try:
+                    builder.build(source, output, env)
+                except (RuntimeError, ValueError) as failure:
+                    error = str(failure)
+            self.assertNotIn(str(source), captured.getvalue())
+            published = sorted(path.name for path in output.iterdir()) if output.exists() else []
+            pin = (runtime / '.zeno-pinned-revision').read_text() if (runtime / '.zeno-pinned-revision').exists() else None
+            return commands, error, published, pin
+
+    def test_verified_reuse_skips_only_runtime_build_and_preserves_native_checks(self):
+        for platform, arch in [('windows', 'x86_64'), ('macos', 'arm64'), ('macos', 'x86_64')]:
+            with self.subTest(platform=platform, arch=arch):
+                commands, error, published, pin = self.exercise(0, platform, arch)
+                self.assertIsNone(error)
+                self.assertEqual(len(published), 2)
+                self.assertIsNone(pin)
+                probe = ['python', 'scripts/reuse-runtime.py', '--revision', 'a' * 40,
+                         '--platform', platform, '--arch', arch, '--output', 'build/runtime']
+                self.assertIn(probe, commands)
+                self.assertFalse(any(command[0] == 'go' or 'bedrock-client' in command or 'scripts/stage-runtime.py' in command for command in commands))
+                self.assertIn(['python', '-m', 'unittest', 'discover', '-s', 'scripts/tests'], commands)
+                self.assertIn(['cargo', 'test', '--locked', '-p', 'zeno-client-mod'], commands)
+                self.assertIn(['cargo', 'build', '--locked', '--release', '-p', 'zeno-client-mod', '--target', 'wasm32-unknown-unknown'], commands)
+                self.assertTrue(any('zeno-client-pack' in command for command in commands))
+                self.assertIn(['cargo', 'test', '--release', '--locked', '--target', builder.TARGETS[platform, arch]], commands)
+                self.assertIn(['cargo', 'build', '--locked', '--release', '--target', builder.TARGETS[platform, arch]], commands)
+                self.assertEqual(commands[-1], ['python', 'scripts/package-release.py'])
+                if platform == 'windows':
+                    self.assertIn(['pwsh', '-NoProfile', '-File', 'scripts/tests/install.Tests.ps1'], commands)
+
+    def test_unavailable_exact_runtime_falls_back_to_pinned_source_build(self):
+        commands, error, published, pin = self.exercise(75)
+        self.assertIsNone(error)
+        self.assertEqual(len(published), 2)
+        self.assertEqual(pin, 'a' * 40)
+        self.assertEqual(sum(command[0] == 'go' for command in commands), 2)
+        self.assertTrue(any('bedrock-client' in command for command in commands))
+        self.assertIn(['python', 'scripts/stage-runtime.py', '--source', 'build/cinnabar', '--output', 'build/runtime', '--platform', 'macos'], commands)
+        self.assertEqual(commands[-1], ['python', 'scripts/package-release.py'])
+
+    def test_invalid_reuse_aborts_before_build_or_artifact_admission(self):
+        for status in [1, 2, -9]:
+            with self.subTest(status=status):
+                commands, error, published, pin = self.exercise(status)
+                self.assertEqual(error, 'Private build stage failed')
+                self.assertEqual(commands[-1][:2], ['python', 'scripts/reuse-runtime.py'])
+                self.assertEqual(published, [])
+                self.assertIsNone(pin)
+
+    def test_runtime_checkout_validation_still_precedes_reuse(self):
+        commands, error, published, pin = self.exercise(0, mismatched_checkout=True)
+        self.assertEqual(error, 'Unexpected runtime revision')
+        self.assertEqual(commands, [])
+        self.assertEqual(published, [])
 
 
 @unittest.skipUnless(importlib.util.find_spec('cryptography'), 'Diagnostics crypto library not installed')

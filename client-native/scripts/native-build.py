@@ -126,7 +126,7 @@ def build(source, output, env):
     try:
         with log_path.open('wb') as log:
             stage = 0
-            def run(command, cwd=source, extra=None):
+            def run(command, cwd=source, extra=None, allowed_returncodes=()):
                 nonlocal stage
                 stage += 1
                 started = time.monotonic()
@@ -136,20 +136,25 @@ def build(source, output, env):
                 variables = child_env | (extra or {})
                 result = subprocess.run(command, cwd=cwd, env=variables, stdout=log, stderr=subprocess.STDOUT)
                 elapsed = time.monotonic() - started
-                if result.returncode:
+                if result.returncode and result.returncode not in allowed_returncodes:
                     print(f'Native build stage {stage} failed (exit {result.returncode}, {elapsed:.1f}s).', file=sys.stderr, flush=True)
                     raise RuntimeError('Private build stage failed')
                 print(f'Native build stage {stage} completed ({elapsed:.1f}s).', flush=True)
+                return result.returncode
 
             run(['python', '-m', 'unittest', 'discover', '-s', 'scripts/tests'])
             run(['cargo', 'test', '--locked', '-p', 'zeno-client-mod'], source / 'mods/zeno-client')
             run(['cargo', 'build', '--locked', '--release', '-p', 'zeno-client-mod', '--target', 'wasm32-unknown-unknown'], source / 'mods/zeno-client')
             run(['cargo', 'run', '--locked', '--release', '-p', 'zeno-client-pack', '--', 'target/wasm32-unknown-unknown/release/zeno_client_mod.wasm', '../../assets/zeno-client.component.wasm'], source / 'mods/zeno-client')
-            run(['cargo', 'build', '--release', '--locked', '-p', 'bedrock-client', '-p', 'asset-compiler', '--features', 'bedrock-client/local-mods', '--bin', 'bedrock-client', '--bin', 'assetc'], runtime)
-            run(['go', 'build', '-trimpath', '-ldflags', '-s -w', '-o', f'target/release/bedrock-core{suffix}', './core/cmd/bedrock-core'], runtime)
-            run(['go', 'build', '-trimpath', '-ldflags', '-s -w', '-o', f'../../target/release/bedrock-local-server{suffix}', '.'], runtime / 'tools/localserver', {'GOWORK': 'off'})
-            (runtime / '.zeno-pinned-revision').write_text(runtime_sha)
-            run(['python', 'scripts/stage-runtime.py', '--source', 'build/cinnabar', '--output', 'build/runtime', '--platform', platform])
+            reused = run(['python', 'scripts/reuse-runtime.py', '--revision', runtime_sha,
+                          '--platform', platform, '--arch', arch, '--output', 'build/runtime'],
+                         allowed_returncodes=(75,))
+            if reused == 75:
+                run(['cargo', 'build', '--release', '--locked', '-p', 'bedrock-client', '-p', 'asset-compiler', '--features', 'bedrock-client/local-mods', '--bin', 'bedrock-client', '--bin', 'assetc'], runtime)
+                run(['go', 'build', '-trimpath', '-ldflags', '-s -w', '-o', f'target/release/bedrock-core{suffix}', './core/cmd/bedrock-core'], runtime)
+                run(['go', 'build', '-trimpath', '-ldflags', '-s -w', '-o', f'../../target/release/bedrock-local-server{suffix}', '.'], runtime / 'tools/localserver', {'GOWORK': 'off'})
+                (runtime / '.zeno-pinned-revision').write_text(runtime_sha)
+                run(['python', 'scripts/stage-runtime.py', '--source', 'build/cinnabar', '--output', 'build/runtime', '--platform', platform])
             if platform == 'windows':
                 run(['pwsh', '-NoProfile', '-File', 'scripts/tests/install.Tests.ps1'])
             run(['cargo', 'test', '--release', '--locked', '--target', target])
