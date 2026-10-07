@@ -71,10 +71,27 @@ class NativeBuilderTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 builder.verify_archive(archive, '0.1.3', 'windows', 'x86_64')
 
+    def test_setup_admission_requires_pe_and_exact_checksum(self):
+        with tempfile.TemporaryDirectory() as directory:
+            setup = Path(directory) / 'ZenoClient-0.1.3-windows-x86_64-setup.exe'
+            header = bytearray(64)
+            header[:2] = b'MZ'
+            header[60:64] = (64).to_bytes(4, 'little')
+            setup.write_bytes(header + b'PE\0\0fixture')
+            checksum = setup.with_name(setup.name + '.sha256')
+            checksum.write_text(f'{hashlib.sha256(setup.read_bytes()).hexdigest()}  {setup.name}\n')
+            builder.verify_setup(setup, '0.1.3', 'x86_64')
+            checksum.write_text('bad')
+            with self.assertRaises(ValueError):
+                builder.verify_setup(setup, '0.1.3', 'x86_64')
+            setup.write_bytes(b'MZ-not-a-PE')
+            with self.assertRaises(ValueError):
+                builder.verify_setup(setup, '0.1.3', 'x86_64')
+
 
 
 class RuntimeReuseTests(unittest.TestCase):
-    def exercise(self, reuse_status, platform='macos', arch='arm64', mismatched_checkout=False):
+    def exercise(self, reuse_status, platform='macos', arch='arm64', mismatched_checkout=False, setup_status=0, missing_setup=False):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / 'private-source'
@@ -86,6 +103,13 @@ class RuntimeReuseTests(unittest.TestCase):
                 packaged.writestr(archive.stem + '/compiled-fixture', b'compiled')
             digest = hashlib.sha256(archive.read_bytes()).hexdigest()
             archive.with_name(archive.name + '.sha256').write_text(f'{digest}  {archive.name}\n')
+            if platform == 'windows' and not missing_setup:
+                setup = archive.with_name(archive.stem + '-setup.exe')
+                header = bytearray(64)
+                header[:2] = b'MZ'
+                header[60:64] = (64).to_bytes(4, 'little')
+                setup.write_bytes(header + b'PE\0\0fixture')
+                setup.with_name(setup.name + '.sha256').write_text(f'{hashlib.sha256(setup.read_bytes()).hexdigest()}  {setup.name}\n')
             output = root / 'artifacts'
             revision = 'a' * 40
             env = {'SOURCE_SHA': 'b' * 40, 'RELEASE_VERSION': '0.1.3',
@@ -95,6 +119,8 @@ class RuntimeReuseTests(unittest.TestCase):
             def run(command, **kwargs):
                 commands.append(command)
                 status = reuse_status if command[:2] == ['python', 'scripts/reuse-runtime.py'] else 0
+                if 'packaging/windows/check-setup.ps1' in command:
+                    status = setup_status
                 return subprocess.CompletedProcess(command, status)
             captured = io.StringIO()
             error = None
@@ -104,7 +130,7 @@ class RuntimeReuseTests(unittest.TestCase):
                  contextlib.redirect_stdout(captured), contextlib.redirect_stderr(captured):
                 try:
                     builder.build(source, output, env)
-                except (RuntimeError, ValueError) as failure:
+                except (RuntimeError, ValueError, FileNotFoundError) as failure:
                     error = str(failure)
             self.assertNotIn(str(source), captured.getvalue())
             published = sorted(path.name for path in output.iterdir()) if output.exists() else []
@@ -116,7 +142,7 @@ class RuntimeReuseTests(unittest.TestCase):
             with self.subTest(platform=platform, arch=arch):
                 commands, error, published, pin = self.exercise(0, platform, arch)
                 self.assertIsNone(error)
-                self.assertEqual(len(published), 2)
+                self.assertEqual(len(published), 4 if platform == 'windows' else 2)
                 self.assertIsNone(pin)
                 probe = ['python', 'scripts/reuse-runtime.py', '--revision', 'a' * 40,
                          '--platform', platform, '--arch', arch, '--output', 'build/runtime']
@@ -128,9 +154,25 @@ class RuntimeReuseTests(unittest.TestCase):
                 self.assertTrue(any('zeno-client-pack' in command for command in commands))
                 self.assertIn(['cargo', 'test', '--release', '--locked', '--target', builder.TARGETS[platform, arch]], commands)
                 self.assertIn(['cargo', 'build', '--locked', '--release', '--target', builder.TARGETS[platform, arch]], commands)
-                self.assertEqual(commands[-1], ['python', 'scripts/package-release.py'])
+                self.assertIn(['python', 'scripts/package-release.py'], commands)
+                if platform != 'windows':
+                    self.assertEqual(commands[-1], ['python', 'scripts/package-release.py'])
                 if platform == 'windows':
                     self.assertIn(['pwsh', '-NoProfile', '-File', 'scripts/tests/install.Tests.ps1'], commands)
+                    self.assertEqual(commands[-1], ['pwsh', '-NoProfile', '-File', 'packaging/windows/check-setup.ps1',
+                        '-Setup', 'dist/ZenoClient-0.1.3-windows-x86_64-setup.exe',
+                        '-Archive', 'dist/ZenoClient-0.1.3-windows-x86_64.zip', '-Version', '0.1.3', '-Revision', 'a' * 40])
+
+    def test_windows_install_check_failure_prevents_every_artifact_upload(self):
+        commands, error, published, pin = self.exercise(0, 'windows', 'x86_64', setup_status=1)
+        self.assertEqual(error, 'Private build stage failed')
+        self.assertIn('packaging/windows/check-setup.ps1', commands[-1])
+        self.assertEqual(published, [])
+
+    def test_windows_requires_setup_pair_in_addition_to_portable_archive(self):
+        commands, error, published, pin = self.exercise(0, 'windows', 'x86_64', missing_setup=True)
+        self.assertIsNotNone(error)
+        self.assertEqual(published, [])
 
     def test_unavailable_exact_runtime_falls_back_to_pinned_source_build(self):
         commands, error, published, pin = self.exercise(75)

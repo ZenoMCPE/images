@@ -112,6 +112,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }},wasm32-unknown-unknown
+      - name: Install pinned Windows setup tooling
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          if ($LASTEXITCODE -ne 0) { throw 'WiX installation failed' }
+          wix extension add -g WixToolset.BootstrapperApplications.wixext/5.0.2
+          if ($LASTEXITCODE -ne 0) { throw 'Burn extension installation failed' }
       - name: Test, compile and package without exposing private build output
         env:
           RELEASE_PLATFORM: ${{ matrix.platform }}
@@ -119,7 +127,7 @@ jobs:
           RELEASE_TARGET: ${{ matrix.target }}
           PRIVATE_DEBUG_PUBLIC_KEY: ${{ vars.PRIVATE_DEBUG_PUBLIC_KEY }}
         run: python builder/client-native/scripts/native-build.py build --source private-source --output public-artifacts
-      - name: Upload only the compiled release archive and checksum
+      - name: Upload only compiled release packages and checksums
         uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.platform }}-${{ matrix.arch }}

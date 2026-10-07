@@ -86,6 +86,23 @@ def verify_archive(archive, version, platform, arch):
 
 
 
+def verify_setup(setup, version, arch):
+    if arch != 'x86_64' or setup.name != f'ZenoClient-{version}-windows-{arch}-setup.exe':
+        raise ValueError('Unexpected Windows setup name')
+    with setup.open('rb') as executable:
+        header = executable.read(64)
+        if len(header) != 64 or header[:2] != b'MZ':
+            raise ValueError('Invalid Windows setup executable')
+        executable.seek(int.from_bytes(header[60:64], 'little'))
+        if executable.read(4) != b'PE\0\0':
+            raise ValueError('Invalid Windows setup PE header')
+    checksum = setup.with_name(setup.name + '.sha256')
+    digest = hashlib.sha256(setup.read_bytes()).hexdigest()
+    if checksum.read_text().strip() != f'{digest}  {setup.name}':
+        raise ValueError('Unexpected Windows setup checksum')
+    return checksum
+
+
 def encrypt_failure_log(log_path, env):
     """Export bounded ciphertext only; the decryption key never enters this runner."""
     from cryptography.hazmat.primitives import hashes, serialization
@@ -160,12 +177,21 @@ def build(source, output, env):
             run(['cargo', 'test', '--release', '--locked', '--target', target])
             run(['cargo', 'build', '--locked', '--release', '--target', target])
             run(['python', 'scripts/package-release.py'])
+            if platform == 'windows':
+                stem = f'ZenoClient-{env["RELEASE_VERSION"]}-windows-{arch}'
+                run(['pwsh', '-NoProfile', '-File', 'packaging/windows/check-setup.ps1',
+                     '-Setup', f'dist/{stem}-setup.exe', '-Archive', f'dist/{stem}.zip',
+                     '-Version', env['RELEASE_VERSION'], '-Revision', runtime_sha])
         archive = source / 'dist' / f'ZenoClient-{env["RELEASE_VERSION"]}-{platform}-{arch}.zip'
         checksum = verify_archive(archive, env['RELEASE_VERSION'], platform, arch)
+        artifacts = [archive, checksum]
+        if platform == 'windows':
+            setup = archive.with_name(archive.stem + '-setup.exe')
+            artifacts.extend([setup, verify_setup(setup, env['RELEASE_VERSION'], arch)])
         if output.exists():
             shutil.rmtree(output)
         output.mkdir(parents=True)
-        for path in (archive, checksum):
+        for path in artifacts:
             shutil.copy2(path, output / path.name)
         print('Native tests, compilation and release package completed successfully.')
     except Exception:
