@@ -25,7 +25,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, zeno-deploy]
 
     strategy:
       fail-fast: false
