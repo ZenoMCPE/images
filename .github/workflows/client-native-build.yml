@@ -83,6 +83,8 @@ jobs:
         with:
           persist-credentials: false
           path: builder
+      - name: Register private source cleanup after dependency caches
+        uses: ./builder/client-native/actions/cleanup-private-source
       - name: Read the private release source
         uses: actions/checkout@v5
         with:
@@ -111,10 +113,24 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: private-source/build/cinnabar/core/go.mod
-          cache: false
+          cache: true
+          cache-dependency-path: |
+            private-source/build/cinnabar/core/go.sum
+            private-source/build/cinnabar/tools/localserver/go.sum
+            private-source/build/cinnabar/go.work.sum
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }},wasm32-unknown-unknown
+      - name: Cache public Rust dependencies without workspace artifacts
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          key: native-${{ matrix.platform }}-${{ matrix.arch }}
+          cache-workspace-crates: 'false'
+          cache-bin: 'false'
+          workspaces: |
+            private-source -> target
+            private-source/mods/zeno-client -> target
+            private-source/build/cinnabar -> target
       - name: Install pinned Windows setup tooling
         if: matrix.platform == 'windows'
         shell: pwsh
@@ -145,6 +161,3 @@ jobs:
           path: encrypted-diagnostics/*.enc
           if-no-files-found: error
           retention-days: 3
-      - name: Remove private source and local build output
-        if: always()
-        run: python builder/client-native/scripts/native-build.py cleanup --source private-source

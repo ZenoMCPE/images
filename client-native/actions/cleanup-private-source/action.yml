@@ -1,0 +1,7 @@
+name: Remove private build source after dependency caches
+description: Register private-source cleanup after all later action post steps
+runs:
+  using: node24
+  main: main.js
+  post: cleanup.js
+  post-if: always()
