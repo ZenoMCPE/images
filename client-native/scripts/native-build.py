@@ -45,11 +45,20 @@ def inspect_source(source, env):
     manifest = tomllib.loads((source / 'Cargo.toml').read_text())
     if manifest['package']['version'] != env['RELEASE_VERSION']:
         raise ValueError('Unexpected source version')
-    workflow = (source / '.github/workflows/release.yml').read_text()
-    pins = re.findall(r'repository:\s*bedrock-mc/cinnabar\s+ref:\s*([0-9a-f]{40})\b', workflow)
-    if len(pins) != 1:
-        raise ValueError('Expected one pinned runtime revision')
-    return pins[0]
+    sdk = tomllib.loads((source / 'mods/zeno-client/Cargo.toml').read_text())['dependencies']['mod-api']
+    upstream = 'https://github.com/bedrock-mc/cinnabar'
+    if not isinstance(sdk, dict) or sdk.get('git', '').removesuffix('.git') != upstream:
+        raise ValueError('Expected the approved runtime SDK repository')
+    revision = sdk.get('rev')
+    if not isinstance(revision, str) or not re.fullmatch(r'[0-9a-f]{40}', revision) or any(
+            key in sdk for key in ['path', 'branch', 'tag', 'registry', 'package']):
+        raise ValueError('Expected one full runtime SDK commit pin')
+    packages = tomllib.loads((source / 'mods/zeno-client/Cargo.lock').read_text())['package']
+    locked = [package for package in packages if package['name'] == 'mod-api']
+    expected = re.escape('git+' + upstream) + r'(?:\.git)?\?rev=' + revision + '#' + revision
+    if len(locked) != 1 or not re.fullmatch(expected, locked[0].get('source', '')):
+        raise ValueError('Runtime SDK lock disagrees with its manifest pin')
+    return revision
 
 
 def verify_archive(archive, version, platform, arch):
