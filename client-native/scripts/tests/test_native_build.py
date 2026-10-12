@@ -25,6 +25,36 @@ class NativeBuilderTests(unittest.TestCase):
             with self.subTest(field=field, value=value), self.assertRaises(ValueError):
                 builder.validate_request(valid | {field: value})
 
+    def test_inspection_uses_component_pin_and_exact_lock_without_a_workflow_literal(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary)
+            (source / 'Cargo.toml').write_text('[package]\nversion="0.1.23"\n')
+            module = source / 'mods/zeno-client'
+            module.mkdir(parents=True)
+            revision = 'b' * 40
+            upstream = 'https://github.com/bedrock-mc/cinnabar'
+            dependency = f'mod-api = {{ git = "{upstream}", rev = "{revision}" }}'
+            manifest = '[dependencies]\n' + dependency + '\n'
+            (module / 'Cargo.toml').write_text(manifest)
+            lock = ('[[package]]\nname="mod-api"\nversion="0.1.12"\n'
+                    f'source="git+{upstream}?rev={revision}#{revision}"\n')
+            (module / 'Cargo.lock').write_text(lock)
+            env = {'SOURCE_SHA': 'a' * 40, 'RELEASE_VERSION': '0.1.23',
+                   'REQUEST_ID': str(uuid.uuid4())}
+            with patch.object(builder.subprocess, 'check_output', return_value=env['SOURCE_SHA']):
+                self.assertEqual(builder.inspect_source(source, env), revision)
+                for bad in [dependency.replace(upstream, 'https://example.com/untrusted'),
+                            dependency.replace(revision, 'dev'),
+                            dependency.replace(' }', ', branch = "dev" }'),
+                            'mod-api = "0.1.12"']:
+                    (module / 'Cargo.toml').write_text('[dependencies]\n' + bad + '\n')
+                    with self.subTest(dependency=bad), self.assertRaises(ValueError):
+                        builder.inspect_source(source, env)
+                (module / 'Cargo.toml').write_text(manifest)
+                (module / 'Cargo.lock').write_text(lock.replace(revision, 'c' * 40))
+                with self.assertRaisesRegex(ValueError, 'lock disagrees'):
+                    builder.inspect_source(source, env)
+
     def archive(self, root, name):
         archive = root / 'ZenoClient-0.1.3-windows-x86_64.zip'
         with zipfile.ZipFile(archive, 'w') as output:

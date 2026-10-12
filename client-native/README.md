@@ -21,8 +21,9 @@ The private bridge temporarily stores its own read-only, repository-scoped
 credential persistence disabled. The bridge job remains alive while native jobs
 run, then deletes the public secret. Its token also expires when that private
 job ends. No long-lived or broad private-repository access token is stored here.
-The runtime revision comes from the pinned Cinnabar checkout in that source's
-release workflow; update that single pin when changing the bundled runtime.
+The runtime revision comes from `mod-api.rev` in the source component manifest.
+Its SDK lockfile must resolve to that same full commit in the approved Cinnabar
+repository. The private pipeline refreshes this pin before preparing each release.
 
 Private compiler/test/package output is redirected to a runner-local scratch log
 and deleted after the build. Plaintext is never printed or uploaded publicly.
