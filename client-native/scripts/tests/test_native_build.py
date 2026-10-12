@@ -177,7 +177,7 @@ class RuntimeReuseTests(unittest.TestCase):
                 probe = ['python', 'scripts/reuse-runtime.py', '--revision', 'a' * 40,
                          '--platform', platform, '--arch', arch, '--output', 'build/runtime']
                 self.assertIn(probe, commands)
-                self.assertFalse(any(command[0] == 'go' or 'bedrock-client' in command or 'scripts/stage-runtime.py' in command for command in commands))
+                self.assertFalse(any(command[0] == 'go' or 'cinnabar/local-mods' in command or 'scripts/stage-runtime.py' in command for command in commands))
                 self.assertIn(['python', '-m', 'unittest', 'discover', '-s', 'scripts/tests'], commands)
                 self.assertIn(['cargo', 'test', '--locked', '-p', 'zeno-client-mod'], commands)
                 self.assertIn(['cargo', 'build', '--locked', '--release', '-p', 'zeno-client-mod', '--target', 'wasm32-unknown-unknown'], commands)
@@ -210,7 +210,7 @@ class RuntimeReuseTests(unittest.TestCase):
         self.assertEqual(len(published), 2)
         self.assertEqual(pin, 'a' * 40)
         self.assertEqual(sum(command[0] == 'go' for command in commands), 2)
-        self.assertTrue(any('bedrock-client' in command for command in commands))
+        self.assertTrue(any('cinnabar/local-mods' in command for command in commands))
         self.assertIn(['python', 'scripts/stage-runtime.py', '--source', 'build/cinnabar', '--output', 'build/runtime', '--platform', 'macos'], commands)
         self.assertEqual(commands[-1], ['python', 'scripts/package-release.py'])
 
