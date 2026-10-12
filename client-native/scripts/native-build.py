@@ -176,7 +176,7 @@ def build(source, output, env):
                           '--platform', platform, '--arch', arch, '--output', 'build/runtime'],
                          allowed_returncodes=(75,))
             if reused == 75:
-                run(['cargo', 'build', '--release', '--locked', '-p', 'bedrock-client', '-p', 'asset-compiler', '--features', 'bedrock-client/local-mods', '--bin', 'bedrock-client', '--bin', 'assetc'], runtime)
+                run(['cargo', 'build', '--release', '--locked', '-p', 'cinnabar', '-p', 'asset-compiler', '--features', 'cinnabar/local-mods', '--bin', 'cinnabar', '--bin', 'assetc'], runtime)
                 run(['go', 'build', '-trimpath', '-ldflags', '-s -w', '-o', f'target/release/bedrock-core{suffix}', './core/cmd/bedrock-core'], runtime)
                 run(['go', 'build', '-trimpath', '-ldflags', '-s -w', '-o', f'../../target/release/bedrock-local-server{suffix}', '.'], runtime / 'tools/localserver', {'GOWORK': 'off'})
                 (runtime / '.zeno-pinned-revision').write_text(runtime_sha)
