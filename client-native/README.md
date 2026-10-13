@@ -67,3 +67,30 @@ Diagnostics use `cryptography==48.0.1`: its Windows amd64 and macOS universal2
 ABI3 wheels support CPython 3.13 and both Mac architectures. Later 49/50 releases
 removed Intel Mac wheels, so both builder and bridge deliberately share this pin.
 [PyPI release files](https://pypi.org/project/cryptography/48.0.1/#files).
+
+## Windows packaging repair
+
+`client-windows-repair.yml` repackages an existing Windows payload without Rust or
+Go compilation. Its manual, main-only dispatch accepts `source_sha`, `version`,
+`tool_sha`, `runtime_sha`, `input_sha`, `request_id`, and `original`. The last
+input is JSON with exactly `run_id`, `workflow_id`, `public_sha`, `request_id`,
+`artifact_id`, and `artifact_digest` from a previously successful native run.
+Service IDs are positive integers and the digest is `sha256:` plus 64 lowercase
+hexadecimal characters.
+
+The worker checks the original run, repository, workflow, title, artifact identity
+and full artifact digest, then the inner portable ZIP digest. It reads the frozen
+application commit with the same ephemeral, read-only source credential. Only the
+packaging helper blob comes from the separately pinned `tool_sha`; its Git blob
+identity is checked before local execution. API credentials are removed from the
+packaging child's environment. Private output uses the existing encrypted
+diagnostics path and post-action source cleanup.
+
+The helper restores canonical notices while preserving the existing binaries,
+and creates the ZIP and setup from one staging directory using WiX 5.0.2. The
+worker admits only the four verified Windows packages/checksums into one
+`repair-windows-x86_64` artifact. Failure diagnostics retain the existing
+`native-debug-windows-x86_64` name and authenticated request context. The private
+coordinator must bind the exact repair run and public workflow revision when
+collecting them. Private release mutation credentials and publication stay in
+that coordinator; this worker has only public Actions/Contents read permission.
