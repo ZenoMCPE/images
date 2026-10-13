@@ -1,0 +1,131 @@
+name: Internal Windows packaging repair
+run-name: Repair ${{ inputs.request_id }} ${{ inputs.source_sha }} ${{ inputs.version }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Full immutable private application release commit
+        required: true
+        type: string
+      version:
+        description: Exact existing release version
+        required: true
+        type: string
+      tool_sha:
+        description: Full immutable private packaging helper commit
+        required: true
+        type: string
+      runtime_sha:
+        description: Full frozen runtime SDK revision
+        required: true
+        type: string
+      input_sha:
+        description: SHA256 of the original portable Windows ZIP
+        required: true
+        type: string
+      request_id:
+        description: New canonical request UUID
+        required: true
+        type: string
+      original:
+        description: Exact original run, workflow, revision, request, artifact and digest JSON
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: windows-repair-${{ inputs.request_id }}
+  cancel-in-progress: false
+
+env:
+  SOURCE_SHA: ${{ inputs.source_sha }}
+  RELEASE_VERSION: ${{ inputs.version }}
+  TOOL_SHA: ${{ inputs.tool_sha }}
+  RUNTIME_SHA: ${{ inputs.runtime_sha }}
+  INPUT_SHA: ${{ inputs.input_sha }}
+  REQUEST_ID: ${{ inputs.request_id }}
+  ORIGINAL: ${{ inputs.original }}
+
+jobs:
+  validate:
+    if: github.repository == 'ZenoMCPE/images' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Validate immutable packaging request
+        run: python3 client-native/scripts/windows-repair.py validate
+
+  repair:
+    needs: validate
+    runs-on: windows-2025
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          path: builder
+      - name: Register private source cleanup
+        uses: ./builder/client-native/actions/cleanup-private-source
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Test public packaging admission
+        run: |
+          python -m unittest discover -s builder/client-native/scripts/tests -p test_windows_repair.py -v
+          if ($LASTEXITCODE -ne 0) { throw 'Public packaging admission tests failed' }
+      - name: Install pinned encrypted diagnostics library
+        run: |
+          python -m pip install --only-binary=:all: cryptography==48.0.1
+          if ($LASTEXITCODE -ne 0) { throw 'Diagnostics dependency installation failed' }
+      - name: Preserve frozen checkout bytes
+        run: |
+          git config --global core.autocrlf false
+          if ($LASTEXITCODE -ne 0) { throw 'Git checkout configuration failed' }
+      - name: Read only the frozen private release source
+        uses: actions/checkout@v5
+        with:
+          repository: ZenoMCPE/client
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+          token: ${{ secrets.CLIENT_SOURCE_TOKEN }}
+          path: private-source
+      - name: Install pinned Windows packaging tools
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          if ($LASTEXITCODE -ne 0) { throw 'WiX installation failed' }
+          wix extension add -g WixToolset.BootstrapperApplications.wixext/5.0.2
+          if ($LASTEXITCODE -ne 0) { throw 'Burn extension installation failed' }
+      - name: Verify and repackage existing binaries with private output suppressed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLIENT_SOURCE_TOKEN: ${{ secrets.CLIENT_SOURCE_TOKEN }}
+          PRIVATE_DEBUG_PUBLIC_KEY: ${{ vars.PRIVATE_DEBUG_PUBLIC_KEY }}
+        run: |
+          python builder/client-native/scripts/windows-repair.py repair --source private-source --output public-artifacts
+          if ($LASTEXITCODE -ne 0) { throw 'Windows packaging-only verification failed' }
+      - name: Upload only the four verified Windows deliverables
+        uses: actions/upload-artifact@v4
+        with:
+          name: repair-windows-x86_64
+          path: public-artifacts/*
+          if-no-files-found: error
+          retention-days: 3
+      - name: Upload encrypted failure diagnostics only
+        if: failure() && hashFiles('encrypted-diagnostics/*.enc') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-debug-windows-x86_64
+          path: encrypted-diagnostics/*.enc
+          if-no-files-found: error
+          retention-days: 3
