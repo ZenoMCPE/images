@@ -1,0 +1,29 @@
+#!/bin/sh
+# Rebuild the existing shared-library ABI with the upstream signal-context fix.
+# Upstream patch and license: https://github.com/ruby/ruby/commit/1565adc5b9d2dfc6d288dc9bdefb19b2423aa28c
+set -eu
+[ "$(ruby -e 'print RUBY_VERSION')" = '3.4.12' ]
+mkdir -p /usr/src/ruby
+cd /usr/src/ruby
+curl -fsSL https://cache.ruby-lang.org/pub/ruby/3.4/ruby-3.4.12.tar.gz -o /tmp/ruby.tar.gz
+printf '%s  %s\n' '5e5d85ad93b0adcccbad47733680f4892bd0078e3342437f7babce01c1872479' /tmp/ruby.tar.gz | sha256sum -c -
+tar -xzf /tmp/ruby.tar.gz --strip-components=1
+# The released source has patchlevel148; only the functional hunk is backported.
+python3 - <<'EXTRACT' > /tmp/signal-close-functional.patch
+from pathlib import Path
+patch = Path('/tmp/signal-close.patch').read_text()
+start = patch.index('diff --git a/thread.c ')
+end = patch.index('diff --git a/version.h ')
+functional = patch[start:end]
+assert functional.count('+        rb_mutex_allow_trap(wakeup_mutex, 1);') == 1
+print(functional, end='')
+EXTRACT
+patch --batch -p1 < /tmp/signal-close-functional.patch
+ruby -rrbconfig -rshellwords -e 'abort unless system("./configure", *Shellwords.split(RbConfig::CONFIG.fetch("configure_args")))'
+jobs="$BUILD_JOBS"
+if [ "$jobs" -gt 2 ]; then jobs=2; fi
+library="$(ruby -rrbconfig -e 'print RbConfig::CONFIG.fetch("LIBRUBY_SO")')"
+make -j "$jobs" "$library"
+install -D -m 755 "$library" "/opt/ruby-fix/lib/$library"
+mkdir -p /opt/ruby-fix/licenses
+cp COPYING BSDL LEGAL /opt/ruby-fix/licenses/

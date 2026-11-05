@@ -1,0 +1,37 @@
+From 1565adc5b9d2dfc6d288dc9bdefb19b2423aa28c Mon Sep 17 00:00:00 2001
+From: nagachika <nagachika@ruby-lang.org>
+Date: Tue, 3 Nov 2026 17:14:07 +0900
+Subject: [PATCH] merge revision(s) ba68343d3ad0465ae9cdaf786dd100b9ed0add07:
+ [Backport #22456]
+
+	[PATCH] Allow wakeup mutex to be used in trap context. (#13684)
+---
+ thread.c  | 1 +
+ version.h | 2 +-
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/thread.c b/thread.c
+index d0f749bf906858..c2fb9c9bb3a5a9 100644
+--- a/thread.c
++++ b/thread.c
+@@ -2712,6 +2712,7 @@ rb_notify_fd_close(int fd, struct rb_io_close_wait_list *busy)
+     if (has_any) {
+         wakeup_mutex = rb_mutex_new();
+         RBASIC_CLEAR_CLASS(wakeup_mutex); /* hide from ObjectSpace */
++        rb_mutex_allow_trap(wakeup_mutex, 1);
+     }
+     busy->wakeup_mutex = wakeup_mutex;
+ 
+diff --git a/version.h b/version.h
+index bc8ca52ceefbf8..6f2498267f0586 100644
+--- a/version.h
++++ b/version.h
+@@ -11,7 +11,7 @@
+ # define RUBY_VERSION_MINOR RUBY_API_VERSION_MINOR
+ #define RUBY_VERSION_TEENY 12
+ #define RUBY_RELEASE_DATE RUBY_RELEASE_YEAR_STR"-"RUBY_RELEASE_MONTH_STR"-"RUBY_RELEASE_DAY_STR
+-#define RUBY_PATCHLEVEL 155
++#define RUBY_PATCHLEVEL 156
+ 
+ #include "ruby/version.h"
+ #include "ruby/internal/abi.h"
