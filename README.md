@@ -6,10 +6,12 @@ Shared container base images for Zeno deployments.
 
 `ruby-api-base` publishes two GHCR tags for Ruby API services:
 
-- `ghcr.io/zenomcpe/ruby-api-base:3.4-build`
-- `ghcr.io/zenomcpe/ruby-api-base:3.4-runtime`
+- `ghcr.io/zenomcpe/ruby-api-base:3.4.12-signal-close-1565adc-build`
+- `ghcr.io/zenomcpe/ruby-api-base:3.4.12-signal-close-1565adc-runtime`
 
 Use the `build` tag for bundle install and test stages. Use the `runtime` tag for the final deployed image.
+
+These images apply the functional change from the upstream [signal-context pipe-close backport](https://github.com/ruby/ruby/commit/1565adc5b9d2dfc6d288dc9bdefb19b2423aa28c) to Ruby 3.4.12, retaining the released patchlevel 148. The shared library is rebuilt with the original configuration and ABI; the base standard library and extensions stay intact. Both image targets must pass a real blocked-writer signal/close regression before publication. Commit-qualified tags and image digests identify built outputs. Use a digest when pinning a deployed image.
 
 ## Lisette Go Base
 

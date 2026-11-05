@@ -12,7 +12,7 @@ on:
       ruby-version:
         description: Ruby version tag to build.
         required: true
-        default: "3.4"
+        default: "3.4.12"
         type: string
 
 permissions:
@@ -21,11 +21,11 @@ permissions:
 
 env:
   IMAGE: ghcr.io/zenomcpe/ruby-api-base
-  RUBY_VERSION: ${{ github.event.inputs.ruby-version || '3.4' }}
+  RUBY_VERSION: ${{ github.event.inputs.ruby-version || '3.4.12' }}
 
 jobs:
   build:
-    runs-on: [self-hosted, linux, x64, zeno-deploy]
+    runs-on: [zeno-ruby-base-linux-x64]
 
     strategy:
       fail-fast: false
@@ -39,6 +39,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.3
+        with:
+          persist-credentials: false
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -60,6 +62,7 @@ jobs:
             RUBY_VERSION=${{ env.RUBY_VERSION }}
           push: true
           tags: |
-            ${{ env.IMAGE }}:${{ env.RUBY_VERSION }}-${{ matrix.suffix }}
+            ${{ env.IMAGE }}:${{ env.RUBY_VERSION }}-signal-close-1565adc-${{ matrix.suffix }}
+            ${{ env.IMAGE }}:${{ env.RUBY_VERSION }}-signal-close-1565adc-${{ github.sha }}-${{ matrix.suffix }}
           cache-from: type=gha,scope=ruby-api-base-${{ matrix.target }}
           cache-to: type=gha,mode=max,scope=ruby-api-base-${{ matrix.target }}
